@@ -59,9 +59,15 @@ namespace EliteMMO.Tutorial
 
                 // Kill the mob.
                 EngageMob(mob, MeleeDistance, eliteApi);
+
+                Thread.Sleep(100);
             }
         }
 
+        /// <summary>
+        /// Exit if no game instance is running.
+        /// </summary>
+        /// <param name="process"></param>
         private static void EnsureGameStarted(Process process)
         {
             if (process == null)
@@ -94,9 +100,26 @@ namespace EliteMMO.Tutorial
                 if (!IsWithinRange(mob, meleeDistance))
                     ApproachMob(mob, meleeDistance, eliteApi);
 
+                // Make the player face the mob.
+                FaceTarget(mob, eliteApi);
+
                 // Melee mob until it is dead.
                 EngageMob(eliteApi);
+
+                Thread.Sleep(100);
             }
+        }
+
+        /// <summary>
+        /// Makes the player turn and face the given mob.
+        /// </summary>
+        /// <param name="mob"></param>
+        /// <param name="eliteApi"></param>
+        private static void FaceTarget(KeyValuePair<int, EliteAPI.EntityEntry> mob, EliteAPI eliteApi)
+        {
+            var player = FindPlayer(eliteApi);
+            FaceHeading(mob, player, eliteApi);
+            TargetMob(mob, eliteApi);
         }
 
         /// <summary>
@@ -110,6 +133,11 @@ namespace EliteMMO.Tutorial
             Thread.Sleep(100);
         }
 
+        /// <summary>
+        /// Player is fighting and has engaged the target. 
+        /// </summary>
+        /// <param name="eliteApi"></param>
+        /// <returns></returns>
         private static bool IsFighting(EliteAPI eliteApi)
         {
             return eliteApi.Player.Status == (int)Status.Fighting;
@@ -122,7 +150,9 @@ namespace EliteMMO.Tutorial
         /// <returns></returns>
         private static bool IsDead(KeyValuePair<int, EliteAPI.EntityEntry> entity)
         {
-            return entity.Value.Status == (uint)Status.Dead1 || entity.Value.Status == (uint)Status.Dead2;
+            return entity.Value.Status == (int)EntityStatus.Dead ||
+                   entity.Value.Status == (int)EntityStatus.DeadEngaged ||
+                   entity.Value.HealthPercent <= 0;
         }
 
         /// <summary>
@@ -155,7 +185,7 @@ namespace EliteMMO.Tutorial
                 EliteAPI.XiEntity player = FindPlayer(eliteApi);
 
                 // Make the player look at the target.
-                FaceTarget(mob, player, eliteApi);
+                FaceHeading(mob, player, eliteApi);
 
                 // Start moving the player towards the target. 
                 StartRunning(eliteApi);
@@ -187,7 +217,7 @@ namespace EliteMMO.Tutorial
         }
 
         /// <summary>
-        /// Stops the player from running anymore. 
+        /// Stops the player from running anymore.
         /// </summary>
         /// <param name="eliteApi"></param>
         private static void StopRunning(EliteAPI eliteApi)
@@ -211,7 +241,7 @@ namespace EliteMMO.Tutorial
         /// <param name="target"></param>
         /// <param name="player"></param>
         /// <param name="eliteApi"></param>
-        private static void FaceTarget(KeyValuePair<int, EliteAPI.EntityEntry> target, EliteAPI.XiEntity player, EliteAPI eliteApi)
+        private static void FaceHeading(KeyValuePair<int, EliteAPI.EntityEntry> target, EliteAPI.XiEntity player, EliteAPI eliteApi)
         {
             byte angle = (byte)(Math.Atan((target.Value.Z - player.Z) / (target.Value.X - player.X)) * -(128.0f / Math.PI));
             if (player.X > target.Value.X) angle += 128;
@@ -249,8 +279,20 @@ namespace EliteMMO.Tutorial
         {
             return entities
                 .Where(IsMob)
+                .Where(IsRendered)
+                .Where(x => !IsDead(x))
                 .OrderBy(Distance)
                 .FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Make sure mob is visible and rendered on the screen.
+        /// </summary>
+        /// <param name="entity"></param>
+        /// <returns></returns>
+        private static bool IsRendered(KeyValuePair<int, EliteAPI.EntityEntry> entity)
+        {
+            return (entity.Value.Render0000 & 0x200) == 0x200;
         }
 
         /// <summary>
@@ -271,7 +313,7 @@ namespace EliteMMO.Tutorial
         private static bool IsMob(KeyValuePair<int, EliteAPI.EntityEntry> entity)
         {
             int mobFlag = 0x10;
-            return (entity.Value.SpawnFlags & mobFlag) == 0;
+            return (entity.Value.SpawnFlags & mobFlag) == mobFlag;
         }
 
         /// <summary>
